@@ -1,0 +1,195 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Sora', sans-serif;
+    background-color: #050508;
+    color: #F1F5F9;
+    -webkit-tap-highlight-color: transparent;
+    overflow-x: auto;
+    overflow-y: auto;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.1) transparent;
+  }
+
+  /* Custom scrollbar for webkit */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.1);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.2);
+  }
+}
+
+@layer components {
+  .glass-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 16px;
+    backdrop-filter: blur(10px);
+  }
+
+  .glass-card-gold {
+    background: rgba(255, 184, 0, 0.025);
+    border: 1px solid rgba(255, 184, 0, 0.15);
+    border-radius: 16px;
+    backdrop-filter: blur(10px);
+  }
+
+  .glass-card-cyan {
+    background: rgba(0, 229, 255, 0.025);
+    border: 1px solid rgba(0, 229, 255, 0.15);
+    border-radius: 16px;
+    backdrop-filter: blur(10px);
+  }
+
+  .btn-gold {
+    background: linear-gradient(135deg, #FFB800, #F59E0B);
+    color: #050508;
+    border-radius: 12px;
+    font-family: 'Orbitron', monospace;
+    font-weight: 700;
+    letter-spacing: 1px;
+    box-shadow: 0 0 20px rgba(255,184,0,0.2);
+    transition: all 0.15s ease;
+  }
+
+  .btn-gold:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 0 30px rgba(255,184,0,0.35);
+  }
+
+  .btn-gold:active:not(:disabled) {
+    transform: scale(0.96);
+  }
+
+  .btn-gold:disabled {
+    opacity: 0.32;
+    cursor: not-allowed;
+  }
+
+  .btn-green {
+    background: linear-gradient(135deg, #00E096, #00B894);
+    color: #050508;
+    border-radius: 12px;
+    font-family: 'Orbitron', monospace;
+    font-weight: 700;
+    letter-spacing: 1px;
+    box-shadow: 0 0 20px rgba(0,224,150,0.2);
+    animation: pulseGlow 2s ease-in-out infinite;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #64748B;
+    border-radius: 12px;
+    transition: all 0.15s ease;
+  }
+
+  .btn-ghost:hover {
+    border-color: rgba(255,255,255,0.2);
+    color: #F1F5F9;
+  }
+
+  .text-gold {
+    color: #FFB800;
+  }
+
+  .text-cyan {
+    color: #00E5FF;
+  }
+
+  .bg-dot-grid {
+    background-image: 
+      linear-gradient(rgba(255,255,255,0.011) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.011) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .orb-pulse {
+    position: absolute;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 184, 0, 0.3);
+    animation: orbPulse 2s ease-out infinite;
+  }
+
+  @keyframes orbPulse {
+    0% { transform: scale(1); opacity: 0.6; }
+    100% { transform: scale(1.6); opacity: 0; }
+  }
+
+  .win-flash {
+    animation: winFlash 0.5s ease-out;
+  }
+
+  @keyframes winFlash {
+    0%, 100% { box-shadow: 0 0 0 rgba(0,224,150,0); }
+    50% { box-shadow: 0 0 30px rgba(0,224,150,0.3); }
+  }
+
+  .lose-flash {
+    animation: loseFlash 0.5s ease-out;
+  }
+
+  @keyframes loseFlash {
+    0%, 100% { box-shadow: 0 0 0 rgba(255,61,113,0); }
+    50% { box-shadow: 0 0 30px rgba(255,61,113,0.3); }
+  }
+
+  .number-roll {
+    filter: blur(4px);
+    animation: rollBlur 0.7s ease-out;
+  }
+
+  @keyframes rollBlur {
+    0% { filter: blur(8px); transform: translateY(-10px); }
+    50% { filter: blur(4px); transform: translateY(5px); }
+    100% { filter: blur(0); transform: translateY(0); }
+  }
+
+  .crash-line {
+    stroke-dasharray: 1000;
+    stroke-dashoffset: 1000;
+    animation: drawLine 0.5s ease-out forwards;
+  }
+
+  @keyframes drawLine {
+    to { stroke-dashoffset: 0; }
+  }
+
+  .shimmer-text {
+    background: linear-gradient(90deg, #FFB800 0%, #FFF 50%, #FFB800 100%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer 2.5s linear infinite;
+  }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10% { transform: translateX(-5px); }
+  20% { transform: translateX(5px); }
+  30% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  50% { transform: translateX(-3px); }
+  60% { transform: translateX(3px); }
+  70% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+  90% { transform: translateX(-1px); }
+}
