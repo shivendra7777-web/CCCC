@@ -1,19 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
-import { 
-  Zap, Pickaxe, Gamepad2, Trophy, Wallet, 
-  Copy, Share2, RefreshCw, Shield, ArrowUpDown, 
+import {
+  Zap, Pickaxe, Gamepad2, Trophy, Wallet,
+  Copy, Share2, RefreshCw, Shield, ArrowUpDown,
   Clock, AlertTriangle, ChevronDown, ChevronUp, Infinity,
   Users, Gift, X
 } from 'lucide-react';
 import { supabase } from './supabaseClient';
-import { 
-  updateUser as apiUpdateUser, 
-  addTransaction as apiAddTransaction, 
-  placeBet as apiPlaceBet, 
-  updateBet as apiUpdateBet, 
-  addMiningTap as apiAddMiningTap, 
+import {
+  updateUser as apiUpdateUser,
+  addTransaction as apiAddTransaction,
+  placeBet as apiPlaceBet,
+  updateBet as apiUpdateBet,
+  addMiningTap as apiAddMiningTap,
   getLeaderboard as apiGetLeaderboard,
   getReferralStats as apiGetReferralStats,
   getUserByReferralCode as apiGetUserByReferralCode,
@@ -37,7 +37,7 @@ const generateRefCode = () => {
 export default function App() {
   const [activeTab, setActiveTab] = useState('mine');
   const [isReady, setIsReady] = useState(false);
-
+  
   // Referral system state
   const [showReferralModal, setShowReferralModal] = useState(false);
   const [inviterInfo, setInviterInfo] = useState(null);
@@ -49,9 +49,7 @@ export default function App() {
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('tonmine_user');
     const base = {
-      id: null,
-      telegramId: null,
-      username: 'TonMiner', tmcBalance: 1247.50, totalMined: 748.50, totalWagered: 450.00,
+      id: null, telegramId: null, username: 'TonMiner', tmcBalance: 1247.50, totalMined: 748.50, totalWagered: 450.00,
       totalWon: 374.20, totalLost: 200.00, miningRate: 0.5, miningLevel: 1,
       energy: 100, maxEnergy: 100, lastTapAt: null, lastDailyTapAt: 0,
       lastActiveAt: Date.now(), lastEnergyRegen: Date.now(),
@@ -72,10 +70,8 @@ export default function App() {
     if (tg) {
       tg.ready();
       tg.expand();
-
       const initData = tg.initDataUnsafe || {};
       const startParam = initData.start_param || new URLSearchParams(window.location.search).get('start') || new URLSearchParams(window.location.search).get('startapp');
-
       if (startParam) {
         console.log('🔗 Referral parameter detected:', startParam);
         localStorage.setItem('tonmine_pending_ref', startParam);
@@ -90,7 +86,6 @@ export default function App() {
       try {
         // In production: const telegramId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
         const telegramId = 100001;
-
         console.log('Fetching user from Supabase...');
         const { data, error } = await supabase
           .from('users')
@@ -108,7 +103,7 @@ export default function App() {
         if (data) {
           // EXISTING USER
           console.log('Existing user loaded:', data.username, 'ID:', data.id);
-
+          
           // Check if user was referred and hasn't seen welcome yet
           if (data.referred_by && !localStorage.getItem('tonmine_ref_welcomed_' + data.id)) {
             try {
@@ -155,7 +150,6 @@ export default function App() {
           // NEW USER — check for pending referral
           const pendingRef = localStorage.getItem('tonmine_pending_ref');
           const newRefCode = generateRefCode();
-
           const baseUserData = {
             telegram_id: telegramId,
             username: 'TonMiner',
@@ -175,13 +169,12 @@ export default function App() {
           };
 
           let newUserData;
-
           if (pendingRef) {
             console.log('Creating user with referral:', pendingRef);
             try {
               newUserData = await apiCreateUserWithReferral(baseUserData, pendingRef);
               setIsNewUser(true);
-
+              
               // Load referrer info for welcome modal
               const { data: referrer } = await supabase
                 .from('users')
@@ -230,12 +223,13 @@ export default function App() {
         setIsReady(true);
       }
     }
-
     initUser();
   }, []);
 
   const [transactions, setTransactions] = useState([]);
-
+  // === FIX: Force re-render trigger ===
+  const [forceUpdate, setForceUpdate] = useState(0);
+  
   // Load transactions from Supabase when user is ready
   useEffect(() => {
     async function loadTransactions() {
@@ -275,7 +269,6 @@ export default function App() {
         setTransactions(fallback);
       }
     }
-
     loadTransactions();
   }, [user?.id]);
 
@@ -365,7 +358,6 @@ export default function App() {
   }, []);
 
   // ===== CROSS-TAB SYNC SETUP =====
-  // Unique ID for this browser tab (survives re-renders, cleared on tab close)
   const TAB_ID = useRef((() => {
     let id = sessionStorage.getItem('tonmine_tab');
     if (!id) {
@@ -378,7 +370,6 @@ export default function App() {
 
   // ===== SOCKET.IO CRASH GAME (Server-Side Synced) =====
   const socketRef = useRef(null);
-
   useEffect(() => {
     const socket = io('http://localhost:3001');
     socketRef.current = socket;
@@ -412,21 +403,18 @@ export default function App() {
 
       // Build chart points from server multiplier
       if (state.gameState === 'flying') {
-        // Derive elapsed time from multiplier using inverse formula
         const newElapsed = Math.sqrt(Math.max(0, state.multiplier - 1.0) / 0.06);
         g.elapsed = newElapsed;
-
-        // FIX #3: Reconstruct full curve for new connections or fresh round
+        
         if (g.chartPoints.length <= 1) {
           g.chartPoints = [{ t: 0, m: 1.0 }];
-          const stepSize = 0.05; // 50ms resolution
+          const stepSize = 0.05;
           const steps = Math.min(300, Math.floor(newElapsed / stepSize));
           for (let i = 1; i <= steps; i++) {
             const t = i * stepSize;
             const m = 1.0 + 0.06 * t * t;
             g.chartPoints.push({ t, m });
           }
-          // Ensure exact current point is included
           const lastT = g.chartPoints[g.chartPoints.length - 1]?.t;
           if (lastT === undefined || Math.abs(lastT - newElapsed) > 0.001) {
             g.chartPoints.push({ t: newElapsed, m: state.multiplier });
@@ -438,7 +426,7 @@ export default function App() {
         if (g.chartPoints.length > 300) {
           g.chartPoints = [g.chartPoints[0], ...g.chartPoints.slice(1, -1).filter((_, i) => i % 2 === 0), g.chartPoints[g.chartPoints.length - 1]];
         }
-        // Calculate rocket rotation
+
         if (g.chartPoints.length >= 2) {
           const last = g.chartPoints[g.chartPoints.length - 1];
           const prev = g.chartPoints[Math.max(0, g.chartPoints.length - 3)];
@@ -456,8 +444,7 @@ export default function App() {
           }
         }
 
-        // FIX #1: Sync bet + cashout state from server activeBets (new windows / missed events)
-        const myActiveBet = (state.activeBets || []).find(b => 
+        const myActiveBet = (state.activeBets || []).find(b =>
           b.username === userRef.current?.username || b.userId === userRef.current?.id
         );
         if (myActiveBet) {
@@ -477,8 +464,6 @@ export default function App() {
         g.rocketRotation = -45;
         g.particles = [];
 
-        // Sync balance if server sends it in state payload
-        // BUT: ignore stale server balance for 3s after auto-cashout (server DB is async)
         if (state.userBalance !== undefined && userRef.current?.id) {
           const sinceAutoCashout = Date.now() - lastAutoCashoutAtRef.current;
           if (sinceAutoCashout > 3000) {
@@ -486,14 +471,12 @@ export default function App() {
           }
         }
 
-        // Reset bet/cashed state for new round (only if no active bet in new round)
         if (prevState === 'crashed' || prevState === 'flying') {
           setCrashUserBet(null);
           userBetRef.current = null;
           setCrashUserCashed(false);
           userCashedRef.current = false;
           betAutoCashoutRef.current = null;
-          // Clear all old round-specific localStorage cashout keys
           try {
             Object.keys(localStorage).forEach(k => {
               if (k.startsWith('tonmine_cashout_')) localStorage.removeItem(k);
@@ -501,7 +484,7 @@ export default function App() {
           } catch(e) {}
         }
       } else if (state.gameState === 'crashed') {
-        lastDisplayUpdateRef.current = 0; // bypass throttle for crash
+        lastDisplayUpdateRef.current = 0;
         g.particles = Array.from({ length: 15 }, (_, i) => ({
           id: Date.now() + i, x: 50 + Math.random() * 20 - 10, y: 50 + Math.random() * 20 - 10,
           vx: (Math.random() - 0.5) * 5, vy: (Math.random() - 0.5) * 5,
@@ -510,9 +493,8 @@ export default function App() {
         }));
       }
 
-      // FIX #1: Global sync — if server says our bet is gone during betting, reset
       if (state.gameState === 'betting') {
-        const myBetInActive = (state.activeBets || []).find(b => 
+        const myBetInActive = (state.activeBets || []).find(b =>
           b.username === userRef.current?.username || b.userId === userRef.current?.id
         );
         if (!myBetInActive && userBetRef.current) {
@@ -523,7 +505,6 @@ export default function App() {
         }
       }
 
-      // Map server activeBets to roundBets
       const lookupCashout = (username, roundNum) => {
         try {
           const saved = JSON.parse(localStorage.getItem('tonmine_cashout_' + roundNum));
@@ -539,28 +520,20 @@ export default function App() {
         const serverBets = (state.activeBets || []).map(b => {
           const local = g.roundBets.find(rb => rb.username === b.username);
           const srvMult = parseFloat(b.multiplier);
-
-          // CRITICAL: If we already know this bet cashed locally (with a valid multiplier),
-          // NEVER let the server overwrite it with a rounded/different value.
+          
           if (local && local.status === 'cashed' && local.multiplier > 1.01) {
             return { ...local };
           }
-
-          // If server still says 'active' but we already cashed locally, trust local
           if (local && local.status === 'cashed' && b.status !== 'cashed') {
             return { ...local };
           }
 
           let finalMult = (!isNaN(srvMult) && srvMult > 1.01) ? srvMult : (local?.multiplier || null);
-          // If server says cashed but multiplier is missing/1, check localStorage
           if ((!finalMult || finalMult <= 1.01) && b.status === 'cashed') {
             finalMult = lookupCashout(b.username, state.roundNumber);
           }
-
-          // ✅ FIX D: If this is the current user and we still have no valid multiplier,
-          // use the persisted auto-cashout target so we never show "Cashed" blank
           if ((!finalMult || finalMult <= 1.01) && b.status === 'cashed' &&
-              (b.username === userRef.current?.username || b.userId === userRef.current?.id)) {
+            (b.username === userRef.current?.username || b.userId === userRef.current?.id)) {
             try {
               const auto = JSON.parse(localStorage.getItem('tonmine_autocashout_' + userRef.current?.id));
               if (auto && auto.target > 1 && Date.now() - auto.timestamp < 300000) {
@@ -576,14 +549,13 @@ export default function App() {
             multiplier: finalMult || 1
           };
         });
-        // Re-add our cashed bet if server removed it from activeBets entirely
+
         const serverNames = new Set(serverBets.map(b => b.username));
         localCashed.forEach(lb => {
           if (!serverNames.has(lb.username)) serverBets.push(lb);
         });
         g.roundBets = serverBets;
       } else {
-        // Betting phase — fresh round, do NOT carry over old cashed bets
         g.roundBets = (state.activeBets || []).map(b => {
           const srvMult = parseFloat(b.multiplier);
           let finalMult = (!isNaN(srvMult) && srvMult > 1.01) ? srvMult : null;
@@ -596,7 +568,6 @@ export default function App() {
           };
         });
       }
-
       updateDisplay();
     });
 
@@ -608,22 +579,20 @@ export default function App() {
       setUser(prev => ({ ...prev, tmcBalance: data.balance }));
     });
 
-    // ✅ PATCH C: crash:cashedOut — also update roundBets + localStorage
     socket.on('crash:cashedOut', (data) => {
       setCrashUserCashed(true);
       userCashedRef.current = true;
-
       const betAmount = userBetRef.current || 0;
       const winAmount = data.winAmount !== undefined ? data.winAmount : (betAmount * data.multiplier);
       const profit = data.profit !== undefined ? data.profit : (winAmount - betAmount);
       const newBalance = data.balance !== undefined ? data.balance : ((userRef.current?.tmcBalance || 0) + profit);
-
+      
       setUser(prev => ({ ...prev, tmcBalance: newBalance }));
       lastAutoCashoutAtRef.current = Date.now();
+      
       setLiveBets(prev => [{ id: Date.now(), username: userRef.current.username, amount: betAmount, game: 'Crash', result: 'win', multiplier: data.multiplier, profit: Number(profit).toFixed(2) }, ...prev].slice(0, 10));
       setTransactions(prev => [{ id: Date.now(), type: 'crash_cashout', amount: winAmount, direction: 'credit', note: `Crash cashed @ ${data.multiplier.toFixed(2)}×` }, ...prev]);
 
-      // Update roundBets and localStorage so other tabs / VS Code preview can see it
       const myRoundBet = gameRef.current.roundBets.find(b => b.username === userRef.current?.username);
       if (myRoundBet) {
         myRoundBet.multiplier = data.multiplier;
@@ -651,13 +620,11 @@ export default function App() {
       setCrashDisplay(prev => ({ ...prev, roundBets: [...gameRef.current.roundBets] }));
     });
 
-    // ✅ PATCH B: crash:autoCashed — use server balance, read target from storage
     socket.on('crash:autoCashed', (data) => {
       const betAmount = userBetRef.current || 0;
       const serverWin = data.winAmount;
       const serverMult = data.multiplier;
-
-      // Read target from this tab's ref, or from localStorage (other tabs)
+      
       let targetMult = betAutoCashoutRef.current;
       if (!targetMult) {
         try {
@@ -668,18 +635,14 @@ export default function App() {
         } catch (e) {}
       }
 
-      // Display multiplier = target (what user asked for). Balance = server actual.
       const displayMult = targetMult && targetMult > 1 ? targetMult : (serverMult || 1);
-
-      // Always use the server's actual winAmount for balance; do NOT recalculate
       const winAmount = serverWin !== undefined ? serverWin : (betAmount * (serverMult || displayMult));
       const profit = data.profit !== undefined ? data.profit : (winAmount - betAmount);
       const newBalance = data.balance !== undefined ? data.balance : ((userRef.current?.tmcBalance || 0) + profit);
 
-      // Always update balance (crash:state may have already set userCashedRef=true)
       setUser(prev => ({ ...prev, tmcBalance: newBalance }));
       lastAutoCashoutAtRef.current = Date.now();
-
+      
       if (!userCashedRef.current) {
         setCrashUserCashed(true);
         userCashedRef.current = true;
@@ -687,7 +650,6 @@ export default function App() {
         setTransactions(prev => [{ id: Date.now(), type: 'crash_cashout', amount: winAmount, direction: 'credit', note: `Auto-cashed @ ${displayMult.toFixed(2)}×` }, ...prev]);
       }
 
-      // Update roundBets with the display multiplier so all tabs match
       const myRoundBet = gameRef.current.roundBets.find(b => b.username === userRef.current?.username);
       if (myRoundBet) {
         myRoundBet.multiplier = displayMult;
@@ -700,8 +662,6 @@ export default function App() {
           multiplier: displayMult
         });
       }
-
-      // Write to localStorage for cross-tab sync
       try {
         localStorage.setItem('tonmine_cashout_' + gameRef.current.roundNumber, JSON.stringify({
           username: userRef.current?.username || 'You',
@@ -714,7 +674,6 @@ export default function App() {
           timestamp: Date.now()
         }));
       } catch (e) {}
-
       setCrashDisplay(prev => ({ ...prev, roundBets: [...gameRef.current.roundBets] }));
     });
 
@@ -724,14 +683,12 @@ export default function App() {
       setCrashUserCashed(false);
       userCashedRef.current = false;
       betAutoCashoutRef.current = null;
-
-      // Mark our round bet as crashed for instant UI update
+      
       const myRoundBet = gameRef.current.roundBets.find(b => b.username === userRef.current?.username);
       if (myRoundBet) {
         myRoundBet.status = 'crashed';
       }
       setCrashDisplay(prev => ({ ...prev, roundBets: [...gameRef.current.roundBets] }));
-
       setTransactions(prev => [{ id: Date.now(), type: 'bet_debit', amount: data.lostAmount, direction: 'debit', note: `Crash crashed @ ${data.crashPoint.toFixed(2)}×` }, ...prev]);
     });
 
@@ -739,13 +696,10 @@ export default function App() {
       alert(data.message);
     });
 
-    // Cross-tab sync: listen for round-specific localStorage cashout + balance events from other tabs
     const handleStorage = (e) => {
-      // ===== FIX: Sync full user state written by another tab =====
       if (e.key === 'tonmine_user') {
         try {
           const saved = JSON.parse(e.newValue);
-          // Only apply if it's the same user and the incoming data is newer
           if (
             saved &&
             (saved.id === userRef.current?.id || saved.telegramId === userRef.current?.telegramId) &&
@@ -768,7 +722,6 @@ export default function App() {
           }
         } catch(_e) {}
       }
-
       if (e.key && e.key.startsWith('tonmine_cashout_')) {
         try {
           const roundNum = parseInt(e.key.replace('tonmine_cashout_', ''), 10);
@@ -776,12 +729,10 @@ export default function App() {
           if (saved && roundNum === gameRef.current.roundNumber) {
             const bet = gameRef.current.roundBets.find(b => b.username === saved.username);
             if (bet) {
-              // Always update multiplier even if already cashed (fixes cross-tab sync)
               bet.multiplier = saved.multiplier;
               bet.status = 'cashed';
               updateDisplay();
             } else {
-              // Bet not in list yet (new tab opened mid-round) — add it
               gameRef.current.roundBets.push({
                 username: saved.username,
                 amount: saved.amount || 0,
@@ -793,7 +744,6 @@ export default function App() {
           }
         } catch(_e) {}
       }
-      // Sync balance across tabs
       if (e.key && e.key.startsWith('tonmine_balance_')) {
         try {
           const saved = JSON.parse(e.newValue);
@@ -805,7 +755,6 @@ export default function App() {
     };
     window.addEventListener('storage', handleStorage);
 
-    // ✅ CLEANUP MUST BE LAST — after all listeners are registered
     return () => {
       clearInterval(authInterval);
       window.removeEventListener('storage', handleStorage);
@@ -813,21 +762,17 @@ export default function App() {
     };
   }, []);
 
-  // ===== BROADCAST CHANNEL (instant cross-tab user state sync) =====
+  // ===== BROADCAST CHANNEL =====
   useEffect(() => {
     try {
       const channel = new BroadcastChannel('tonmine_user_sync');
       channelRef.current = channel;
-
       channel.onmessage = (event) => {
         const { type, payload, fromTab } = event.data;
-        if (fromTab === TAB_ID.current) return; // Ignore messages we sent ourselves
-
+        if (fromTab === TAB_ID.current) return;
         if (type === 'USER_STATE' && payload) {
           setUser(prev => {
-            // Only apply if same user
             if (payload.id !== prev.id && payload.telegramId !== prev.telegramId) return prev;
-            // Only apply if the incoming data is newer
             if (payload.lastActiveAt < (prev.lastActiveAt || 0)) return prev;
             return {
               ...prev,
@@ -845,10 +790,7 @@ export default function App() {
           });
         }
       };
-    } catch (_e) {
-      console.log('BroadcastChannel not supported, relying on localStorage events');
-    }
-
+    } catch (_e) {}
     return () => {
       if (channelRef.current) { channelRef.current.close(); channelRef.current = null; }
     };
@@ -884,22 +826,17 @@ export default function App() {
         } catch (_e) {}
       }
     };
-
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
-  // ✅ PATCH A: Persist auto-cashout target when betting
   const handleManualBet = useCallback(() => {
     const val = parseFloat(crashBetAmount);
     if (isNaN(val) || val < 0.01) { alert('Minimum bet is 0.01 TMC'); return; }
     if (user.tmcBalance < val) { alert('Insufficient balance!'); return; }
     if (gameRef.current.gameState !== 'betting') { alert('Betting closed!'); return; }
 
-    // Snapshot autoCashout at bet time so auto-cashout display is accurate
     betAutoCashoutRef.current = parseFloat(crashAutoCashout) || null;
-
-    // Persist target for cross-tab / cross-origin sync
     const target = betAutoCashoutRef.current;
     if (target && target > 1) {
       try {
@@ -911,7 +848,6 @@ export default function App() {
       } catch (e) {}
     }
 
-    // Emit via Socket.io to backend
     if (socketRef.current) {
       socketRef.current.emit('crash:bet', {
         userId: user.id,
@@ -923,25 +859,21 @@ export default function App() {
 
   const handleManualCashout = useCallback(() => {
     if (!userBetRef.current || userCashedRef.current || gameRef.current.gameState !== 'flying') return;
-
     const betAmount = userBetRef.current;
     const currentMult = gameRef.current.multiplier;
     const winAmount = betAmount * currentMult;
     const profit = winAmount - betAmount;
     const newBalance = (userRef.current?.tmcBalance || 0) + profit;
 
-    // Optimistic instant update — UI feels immediate, server validates in background
     setCrashUserCashed(true);
     userCashedRef.current = true;
     setUser(prev => ({ ...prev, tmcBalance: newBalance }));
 
-    // Update roundBets immediately so the list shows exact multiplier + profit
     const myRoundBet = gameRef.current.roundBets.find(b => b.username === userRef.current?.username);
     if (myRoundBet) {
       myRoundBet.multiplier = currentMult;
       myRoundBet.status = 'cashed';
     } else {
-      // Bet not yet in roundBets (server lag) — add it manually
       gameRef.current.roundBets.push({
         username: userRef.current?.username || 'You',
         amount: betAmount,
@@ -949,8 +881,6 @@ export default function App() {
         multiplier: currentMult
       });
     }
-
-    // Write to localStorage for cross-tab sync (round-specific key + balance)
     try {
       localStorage.setItem('tonmine_cashout_' + gameRef.current.roundNumber, JSON.stringify({
         username: userRef.current?.username || 'You',
@@ -963,14 +893,10 @@ export default function App() {
         timestamp: Date.now()
       }));
     } catch(e) {}
-
-    // Force immediate React re-render of round bets (bypass 80ms throttle)
     setCrashDisplay(prev => ({ ...prev, roundBets: [...gameRef.current.roundBets] }));
-
     setLiveBets(prev => [{ id: Date.now(), username: userRef.current?.username || 'You', amount: betAmount, game: 'Crash', result: 'win', multiplier: currentMult, profit: profit.toFixed(2) }, ...prev].slice(0, 10));
     setTransactions(prev => [{ id: Date.now(), type: 'crash_cashout', amount: winAmount, direction: 'credit', note: `Crash cashed @ ${currentMult.toFixed(2)}×` }, ...prev]);
 
-    // Emit to server (background validation)
     if (socketRef.current) {
       socketRef.current.emit('crash:cashout', { userId: user.id });
     }
@@ -990,11 +916,10 @@ export default function App() {
     });
   }, [autoBetSettings, crashBetAmount]);
 
-  // ===== PERSIST + BROADCAST user state to all other tabs on every change =====
   useEffect(() => {
     localStorage.setItem('tonmine_user', JSON.stringify(user));
-
-    // Broadcast the new state via BroadcastChannel for instant sync
+    // === FIX: Ensure re-render when user state changes ===
+    setForceUpdate(v => v + 1);
     if (channelRef.current) {
       channelRef.current.postMessage({
         type: 'USER_STATE',
@@ -1020,15 +945,26 @@ export default function App() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setUser(prev => { const now = Date.now(); const regen = Math.floor((now - prev.lastEnergyRegen) / 3000); if (regen > 0) return { ...prev, energy: Math.min(prev.maxEnergy, prev.energy + regen), lastEnergyRegen: now }; return prev; });
+      setUser(prev => { 
+        const now = Date.now(); 
+        const regen = Math.floor((now - prev.lastEnergyRegen) / 3000); 
+        if (regen > 0) return { ...prev, energy: Math.min(prev.maxEnergy, prev.energy + regen), lastEnergyRegen: now }; 
+        return prev; 
+      });
     }, 1000);
     return () => clearInterval(interval);
   }, []);
 
-  const addFloatingText = (text, x, y) => { const id = Date.now(); setFloatingTexts(prev => [...prev, { id, text, x, y }]); setTimeout(() => setFloatingTexts(prev => prev.filter(t => t.id !== id)), 1000); };
+  const addFloatingText = (text, x, y) => { 
+    const id = Date.now(); 
+    setFloatingTexts(prev => [...prev, { id, text, x, y }]); 
+    setTimeout(() => setFloatingTexts(prev => prev.filter(t => t.id !== id)), 1000); 
+  };
 
   const addTransaction = useCallback(async (tx) => {
     setTransactions(prev => [{ id: Date.now(), ...tx }, ...prev]);
+    // === FIX: Trigger re-render after transaction ===
+    setForceUpdate(v => v + 1);
     if (user?.id && !String(user.id).startsWith('local-')) {
       try {
         const balanceAfter = tx.direction === 'credit' ? user.tmcBalance + tx.amount : user.tmcBalance - tx.amount;
@@ -1079,11 +1015,9 @@ export default function App() {
       </main>
       {floatingTexts.map(ft => <div key={ft.id} className="fixed z-50 font-orbitron text-gold font-bold text-sm pointer-events-none animate-float-up" style={{ left: ft.x, top: ft.y }}>{ft.text}</div>)}
       <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
-
-      {/* Referral Welcome Modal */}
-      <ReferralWelcome 
-        show={showReferralModal} 
-        onClose={() => setShowReferralModal(false)} 
+      <ReferralWelcome
+        show={showReferralModal}
+        onClose={() => setShowReferralModal(false)}
         inviter={inviterInfo}
         isNewUser={isNewUser}
       />
@@ -1091,6 +1025,9 @@ export default function App() {
   );
 }
 
+// ============================================
+// SUB-COMPONENTS
+// ============================================
 function Header({ user }) {
   return (
     <header className="sticky top-0 z-40 bg-[rgba(5,5,8,0.85)] backdrop-blur-md border-b border-border">
@@ -1154,26 +1091,20 @@ function BottomNav({ activeTab, setActiveTab }) {
   );
 }
 
-// ============================================
-// REFERRAL WELCOME MODAL
-// ============================================
 function ReferralWelcome({ show, onClose, inviter, isNewUser }) {
   if (!show) return null;
-
   const handleShare = () => {
     const tg = window.Telegram?.WebApp;
     if (tg) {
       tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent('https://t.me/TonMineBot')}&text=${encodeURIComponent('Join me on TONMINE and start earning!')}`);
     }
   };
-
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="glass-card-gold p-6 w-full max-w-sm relative animate-in zoom-in duration-300">
         <button onClick={onClose} className="absolute top-3 right-3 p-1 hover:bg-white/5 rounded-full transition-colors">
           <X className="w-4 h-4 text-text-secondary" />
         </button>
-
         <div className="text-center mb-4">
           <div className="w-16 h-16 rounded-full bg-gold/20 flex items-center justify-center mx-auto mb-3">
             <Gift className="w-8 h-8 text-gold" />
@@ -1187,7 +1118,6 @@ function ReferralWelcome({ show, onClose, inviter, isNewUser }) {
             </p>
           )}
         </div>
-
         <div className="glass-card p-3 mb-4">
           <div className="text-xs text-text-secondary text-center mb-2">Your Earning Structure</div>
           <div className="space-y-2">
@@ -1205,11 +1135,9 @@ function ReferralWelcome({ show, onClose, inviter, isNewUser }) {
             </div>
           </div>
         </div>
-
         <div className="text-center text-xs text-text-muted mb-4">
           Earn TMC every time your friends mine or play. The more they earn, the more you earn!
         </div>
-
         <button onClick={onClose} className="w-full btn-gold py-3 text-sm font-bold">
           {isNewUser ? 'START MINING →' : 'GOT IT'}
         </button>
@@ -1235,22 +1163,18 @@ function MineTab({ user, setUser, addFloatingText, addTransaction }) {
   }, [user.lastDailyTapAt]);
 
   const canTap = () => { const now = Date.now(); return (now - (user.lastDailyTapAt || 0)) >= 86400000; };
-
+  
   const handleTap = async (e) => {
     if (!canTap()) return;
     const rect = orbRef.current?.getBoundingClientRect();
     const x = rect ? rect.left + rect.width / 2 : e.clientX;
     const y = rect ? rect.top : e.clientY;
-
     setUser(prev => ({ ...prev, lastDailyTapAt: Date.now(), lastTapAt: Date.now() }));
     addFloatingText(`⚡ ACTIVATED`, x, y);
     setOrbActive(true); setTimeout(() => setOrbActive(false), 100);
-
     if (user.id && !String(user.id).startsWith('local-')) {
       try {
-        await apiUpdateUser(user.id, {
-          last_daily_tap_at: new Date().toISOString()
-        });
+        await apiUpdateUser(user.id, { last_daily_tap_at: new Date().toISOString() });
       } catch (e) { console.error('DB tap sync failed:', e); }
     }
   };
@@ -1263,7 +1187,6 @@ function MineTab({ user, setUser, addFloatingText, addTransaction }) {
     return { name: 'Bronze', icon: '🥉', color: '#CD7F32' };
   };
   const league = getLeague(user.totalMinedEver);
-
   const upgrades = [
     { level: 1, name: 'Basic Miner', rate: 0.5, referrals: 10, icon: '⛏️' },
     { level: 2, name: 'Fast Miner', rate: 1.0, referrals: 50, icon: '⚡' },
@@ -1275,7 +1198,6 @@ function MineTab({ user, setUser, addFloatingText, addTransaction }) {
     if (user.referrals < upg.referrals) { alert(`Need ${upg.referrals} referrals to unlock ${upg.name}!`); return; }
     setUser(prev => ({ ...prev, miningRate: upg.rate, miningLevel: upg.level }));
     addTransaction({ type: 'upgrade_unlock', amount: 0, direction: 'credit', note: `Unlocked ${upg.name} via referrals` });
-
     if (user.id && !String(user.id).startsWith('local-')) {
       try {
         await apiUpdateUser(user.id, { mining_rate: upg.rate, mining_level: upg.level });
@@ -1285,7 +1207,7 @@ function MineTab({ user, setUser, addFloatingText, addTransaction }) {
 
   const tapAvailable = canTap();
   const canClaim = tapAvailable && (user.lastDailyTapAt || 0) > 0 && (user.lastClaimAt || 0) <= (user.lastDailyTapAt || 0);
-
+  
   const handleDailyClaim = async () => {
     const now = Date.now();
     if (!canClaim) { alert('Not ready yet! Complete your session first.'); return; }
@@ -1297,10 +1219,9 @@ function MineTab({ user, setUser, addFloatingText, addTransaction }) {
     const newBalance = user.tmcBalance + amount;
     const newTotalMined = user.totalMined + amount;
     const newTotalMinedEver = user.totalMinedEver + amount;
-
+    
     setUser(prev => ({ ...prev, tmcBalance: newBalance, totalMined: newTotalMined, totalMinedEver: newTotalMinedEver, claimStreak: streak, lastClaimAt: now }));
     addTransaction({ type: 'mining_daily', amount, direction: 'credit', note: `Day ${streak} streak` });
-
     if (user.id && !String(user.id).startsWith('local-')) {
       try {
         await apiUpdateUser(user.id, {
@@ -1316,8 +1237,6 @@ function MineTab({ user, setUser, addFloatingText, addTransaction }) {
     }
   };
 
-
-
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
       <div className="grid grid-cols-2 gap-3">
@@ -1330,7 +1249,6 @@ function MineTab({ user, setUser, addFloatingText, addTransaction }) {
           <div className="font-orbitron text-lg text-cyan">{formatTMC(user.totalMined)}</div>
         </div>
       </div>
-
       <div className="glass-card p-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-2xl">{league.icon}</span>
@@ -1344,7 +1262,6 @@ function MineTab({ user, setUser, addFloatingText, addTransaction }) {
           <div className="font-orbitron text-xs text-text-secondary">{league.name === 'Legend' ? 'MAX' : formatTMC(league.name === 'Bronze' ? 1000 : league.name === 'Silver' ? 10000 : league.name === 'Gold' ? 100000 : 1000000)} TMC</div>
         </div>
       </div>
-
       <div className="flex flex-col items-center py-6">
         <div ref={orbRef} onClick={handleTap} className={`relative w-36 h-36 cursor-pointer transition-transform duration-100 select-none ${orbActive ? 'scale-[0.91]' : 'scale-100'} ${!tapAvailable ? 'opacity-60' : ''}`}>
           <div className={`absolute inset-0 rounded-full border-2 border-dashed border-gold/30 ${tapAvailable ? 'animate-spin-slow' : ''}`} />
@@ -1359,7 +1276,6 @@ function MineTab({ user, setUser, addFloatingText, addTransaction }) {
             </div>
           </div>
         </div>
-
         <div className="w-48 mt-4 text-center">
           {tapAvailable ? (
             <div className="text-xs text-gold font-medium animate-pulse">⚡ Daily mining ready! Tap to activate</div>
@@ -1375,7 +1291,6 @@ function MineTab({ user, setUser, addFloatingText, addTransaction }) {
           )}
         </div>
       </div>
-
       <div className="glass-card-gold p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-gold" /><span className="font-orbitron text-sm text-gold">Daily Bonus</span></div>
@@ -1386,7 +1301,6 @@ function MineTab({ user, setUser, addFloatingText, addTransaction }) {
           <button onClick={handleDailyClaim} disabled={!canClaim} className="btn-gold px-4 py-2 text-xs disabled:opacity-30">CLAIM</button>
         </div>
       </div>
-
       <div className="space-y-2">
         <h3 className="font-orbitron text-sm text-text-secondary uppercase tracking-wider px-1">Mining Upgrades</h3>
         {upgrades.map(upg => {
@@ -1395,10 +1309,16 @@ function MineTab({ user, setUser, addFloatingText, addTransaction }) {
           const isLocked = !isUnlocked && user.miningLevel < upg.level;
           return (
             <div key={upg.level} className={`glass-card p-3 flex items-center justify-between ${isActive ? 'glass-card-gold' : ''}`}>
-              <div className="flex items-center gap-3"><span className="text-xl">{upg.icon}</span><div><div className="font-sora font-semibold text-sm">{upg.name}</div><div className="text-[10px] text-text-secondary">{upg.rate} TMC/session</div></div></div>
+              <div className="flex items-center gap-3">
+                <span className="text-xl">{upg.icon}</span>
+                <div>
+                  <div className="font-sora font-semibold text-sm">{upg.name}</div>
+                  <div className="text-[10px] text-text-secondary">{upg.rate} TMC/session</div>
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 {isActive ? <span className="text-xs text-cyan font-bold px-2 py-1 bg-cyan/10 rounded">ACTIVE ✓</span> :
-                 isLocked ? <span className="text-xs text-text-muted px-2 py-1 bg-surface rounded">🔒 {upg.referrals} refs</span> :
+                 isLocked ? <span className="text-xs text-text-muted px-2 py-1 bg-surface rounded"> {upg.referrals} refs</span> :
                  <button onClick={() => handleUpgrade(upg)} className="px-3 py-1.5 rounded text-xs font-bold font-orbitron btn-gold">UNLOCK</button>}
               </div>
             </div>
@@ -1411,7 +1331,6 @@ function MineTab({ user, setUser, addFloatingText, addTransaction }) {
 
 function CasinoTab({ user, setUser, liveBets, setLiveBets, addTransaction, setTransactions, crashDisplay, crashUserBet, crashUserCashed, crashBetAmount, setCrashBetAmount, crashAutoCashout, setCrashAutoCashout, crashAutoBet, toggleAutoBet, autoBetSettings, setAutoBetSettings, autoBetStats, showAutoBetSettings, setShowAutoBetSettings, onManualBet, onManualCashout }) {
   const [selectedGame, setSelectedGame] = useState(null);
-
   const games = [
     { id: 'crash', icon: '🚀', label: 'Crash', color: '#FF3D71', desc: 'Fly high, cash out before crash' },
     { id: 'dice', icon: '🎲', label: 'Dice', color: '#00E096', desc: 'Roll over or under your target' },
@@ -1436,7 +1355,6 @@ function CasinoTab({ user, setUser, liveBets, setLiveBets, addTransaction, setTr
           ))}
         </div>
       </div>
-
       {!selectedGame ? (
         <div className="space-y-3">
           <div className="text-center py-2">
@@ -1485,7 +1403,6 @@ function CasinoTab({ user, setUser, liveBets, setLiveBets, addTransaction, setTr
 function CrashGame({ user, crashDisplay, crashUserBet, crashUserCashed, crashBetAmount, setCrashBetAmount, crashAutoCashout, setCrashAutoCashout, crashAutoBet, toggleAutoBet, autoBetSettings, setAutoBetSettings, autoBetStats, showAutoBetSettings, setShowAutoBetSettings, onManualBet, onManualCashout }) {
   const { gameState, displayMultiplier, crashPoint, timeLeft, roundNumber, chartPoints, history, screenShake, particles, rocketRotation, roundBets, serverSeedHash } = crashDisplay;
   const [controlTab, setControlTab] = useState('manual');
-
   const isBetting = gameState === 'betting';
   const isFlying = gameState === 'flying';
   const isCrashed = gameState === 'crashed';
@@ -1525,7 +1442,7 @@ function CrashGame({ user, crashDisplay, crashUserBet, crashUserCashed, crashBet
 
   const maxT = Math.max(8, chartPoints[chartPoints.length - 1]?.t || 8);
   const maxM = Math.max(10, crashDisplay.multiplier * 1.2);
-
+  
   const generateSmoothPath = (pts) => {
     if (pts.length < 2) return '';
     let path = `M ${(pts[0].t / maxT) * 94} ${100 - ((pts[0].m - 1) / (maxM - 1)) * 100}`;
@@ -1538,12 +1455,10 @@ function CrashGame({ user, crashDisplay, crashUserBet, crashUserCashed, crashBet
     }
     return path;
   };
-
   const smoothPath = generateSmoothPath(chartPoints);
   const areaPath = smoothPath + ` L ${(chartPoints[chartPoints.length - 1]?.t / maxT) * 94 || 0} 100 L 0 100 Z`;
   const currentX = chartPoints.length > 0 ? (chartPoints[chartPoints.length - 1].t / maxT) * 94 : 0;
   const currentY = chartPoints.length > 0 ? 100 - ((chartPoints[chartPoints.length - 1].m - 1) / (maxM - 1)) * 100 : 100;
-
   const getLineColor = (m) => { if (m < 2) return '#00E096'; if (m < 5) return '#FFB800'; if (m < 10) return '#00E5FF'; return '#C084FC'; };
   const currentColor = isCrashed ? '#FF3D71' : getLineColor(crashDisplay.multiplier);
 
@@ -1556,7 +1471,6 @@ function CrashGame({ user, crashDisplay, crashUserBet, crashUserCashed, crashBet
           </button>
         ))}
       </div>
-
       <div className={`glass-card p-0 relative h-64 overflow-hidden ${isCrashed ? 'lose-flash' : ''}`}>
         <svg width="0" height="0" className="absolute">
           <defs>
@@ -1565,7 +1479,6 @@ function CrashGame({ user, crashDisplay, crashUserBet, crashUserCashed, crashBet
             <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={currentColor} stopOpacity="0.3" /><stop offset="100%" stopColor={currentColor} stopOpacity="0" /></linearGradient>
           </defs>
         </svg>
-
         <svg viewBox="0 0 100 100" className="w-full h-full" preserveAspectRatio="none">
           {[1, 2, 3, 5, 10, 20, 50].map(g => {
             const y = 100 - ((g - 1) / (maxM - 1)) * 100;
@@ -1582,13 +1495,10 @@ function CrashGame({ user, crashDisplay, crashUserBet, crashUserCashed, crashBet
             if (x > 100) return null;
             return <line key={t} x1={x} y1="0" x2={x} y2="100" stroke="rgba(255,255,255,0.02)" strokeWidth="0.2" strokeDasharray="1,2" />;
           })}
-
           {smoothPath && !isBetting && <path d={areaPath} fill="url(#areaGradient)" opacity="0.6" />}
           {smoothPath && !isBetting && <path d={smoothPath} fill="none" stroke={currentColor} strokeWidth="0.8" strokeLinecap="round" strokeLinejoin="round" style={{ filter: `drop-shadow(0 0 2px ${currentColor}) drop-shadow(0 0 4px ${currentColor})` }} />}
           {smoothPath && !isBetting && <path d={smoothPath} fill="none" stroke={currentColor} strokeWidth="0.3" strokeLinecap="round" opacity="0.9" />}
-
           {isFlying && particles.map(p => <circle key={p.id} cx={p.x} cy={p.y} r={p.size * 0.15} fill={currentColor} opacity={p.opacity * 0.4} />)}
-
           {isFlying && (
             <g transform={`translate(${currentX}, ${currentY}) rotate(${rocketRotation})`}>
               <circle cx="0" cy="0" r="5" fill={currentColor} opacity="0.15" filter="url(#strongGlow)" />
@@ -1606,9 +1516,7 @@ function CrashGame({ user, crashDisplay, crashUserBet, crashUserCashed, crashBet
               <path d="M -0.3,5 Q 0,6.5 0.3,5 Q 0,6 -0.3,5" fill="#FFF" opacity="0.5" />
             </g>
           )}
-
           {isCrashed && particles.map((p, i) => <circle key={p.id} cx={p.x + (Date.now() - p.id) * p.vx * 0.01} cy={p.y + (Date.now() - p.id) * p.vy * 0.01} r={p.size * 0.2} fill={p.color} opacity={Math.max(0, 1 - (Date.now() - p.id) / 1000)} />)}
-
           {isCrashed && (
             <g transform={`translate(${currentX}, ${currentY})`}>
               <text x="0" y="0" fontSize="6" textAnchor="middle" dominantBaseline="middle" fill="#FF3D71" style={{ filter: 'drop-shadow(0 0 5px #FF3D71)' }}>💥</text>
@@ -1616,7 +1524,6 @@ function CrashGame({ user, crashDisplay, crashUserBet, crashUserCashed, crashBet
               <line x1="3" y1="-3" x2="-3" y2="3" stroke="#FF3D71" strokeWidth="0.5" opacity="0.6" />
             </g>
           )}
-
           {isBetting && (
             <g>
               <line x1="0" y1="95" x2="100" y2="95" stroke="#00E096" strokeWidth="0.3" strokeDasharray="2,2" opacity="0.5" />
@@ -1624,7 +1531,6 @@ function CrashGame({ user, crashDisplay, crashUserBet, crashUserCashed, crashBet
             </g>
           )}
         </svg>
-
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
           <div className={`font-orbitron text-5xl font-bold transition-colors duration-300 ${isCrashed ? 'text-red' : displayMultiplier < 2 ? 'text-green' : displayMultiplier < 5 ? 'text-gold' : displayMultiplier < 10 ? 'text-cyan' : 'text-purple'}`} style={{ textShadow: `0 0 20px ${currentColor}40` }}>
             {displayMultiplier.toFixed(2)}×
@@ -1633,7 +1539,6 @@ function CrashGame({ user, crashDisplay, crashUserBet, crashUserCashed, crashBet
           {isCrashed && <div className="text-xs text-red mt-1 font-bold">CRASHED @ {crashPoint?.toFixed(2)}×</div>}
         </div>
       </div>
-
       <div className="space-y-2">
         <div className="flex gap-1 p-0.5 bg-surface rounded-lg">
           {['manual', 'auto'].map(tab => (
@@ -1643,7 +1548,6 @@ function CrashGame({ user, crashDisplay, crashUserBet, crashUserCashed, crashBet
             </button>
           ))}
         </div>
-
         <div className="grid grid-cols-2 gap-2">
           <div className="glass-card p-2 min-w-0">
             <div className="text-[9px] text-text-secondary uppercase tracking-wider mb-1">Amount</div>
@@ -1664,7 +1568,6 @@ function CrashGame({ user, crashDisplay, crashUserBet, crashUserCashed, crashBet
             </div>
           </div>
         </div>
-
         <div className="grid grid-cols-4 gap-1.5">
           {[1, 10, 100, 1000].map(n => (
             <button key={n} onClick={() => setCrashBetAmount(Math.min(n, user.tmcBalance).toFixed(2))} className="py-1.5 rounded-lg text-xs font-bold font-orbitron glass-card text-text-secondary hover:text-gold hover:border-gold/30 transition-all">
@@ -1672,7 +1575,6 @@ function CrashGame({ user, crashDisplay, crashUserBet, crashUserCashed, crashBet
             </button>
           ))}
         </div>
-
         {controlTab === 'manual' && (
           <div className="space-y-2">
             {isBetting && !hasBet && (
@@ -1702,7 +1604,6 @@ function CrashGame({ user, crashDisplay, crashUserBet, crashUserCashed, crashBet
             )}
           </div>
         )}
-
         {controlTab === 'auto' && (
           <div className="space-y-2">
             <div className="glass-card p-2">
@@ -1715,11 +1616,9 @@ function CrashGame({ user, crashDisplay, crashUserBet, crashUserCashed, crashBet
                 <input type="number" value={autoBetSettings.rounds} onChange={e => setAutoBetSettings(prev => ({ ...prev, rounds: Number(e.target.value) }))} className="w-14 bg-surface rounded text-xs font-orbitron text-center outline-none" min="0" />
               </div>
             </div>
-
             <button onClick={toggleAutoBet} className={`w-full py-3.5 rounded-xl text-sm font-bold font-sora transition-all active:scale-95 ${crashAutoBet ? 'bg-red/20 text-red border border-red/30 hover:bg-red/30' : 'bg-green hover:bg-green/80 text-[#050508]'}`}>
               {crashAutoBet ? `STOP AUTO (${autoBetStats.wins}W/${autoBetStats.losses}L)` : 'START AUTO BET'}
             </button>
-
             <div className="glass-card p-2">
               <button onClick={() => setShowAutoBetSettings(!showAutoBetSettings)} className="w-full flex items-center justify-between text-xs font-bold text-text-secondary">
                 <span>Advanced Options</span>
@@ -1766,7 +1665,6 @@ function CrashGame({ user, crashDisplay, crashUserBet, crashUserCashed, crashBet
           </div>
         )}
       </div>
-
       <div className="glass-card p-3">
         <div className="text-[10px] text-text-secondary uppercase tracking-wider mb-2 flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-green animate-pulse" />Round Bets
@@ -1778,7 +1676,6 @@ function CrashGame({ user, crashDisplay, crashUserBet, crashUserCashed, crashBet
             const isCrashed = bet.status === 'crashed';
             const mult = parseFloat(bet.multiplier);
             const hasValidMult = !isNaN(mult) && mult > 1.01;
-            // Profit is always calculated from the stored multiplier so it matches the display
             const profit = hasValidMult ? Number((bet.amount * mult) - bet.amount).toFixed(2) : null;
             return (
               <div key={i} className="flex items-center justify-between text-xs glass-card p-2">
@@ -1788,8 +1685,8 @@ function CrashGame({ user, crashDisplay, crashUserBet, crashUserCashed, crashBet
                   {isCashed
                     ? (profit !== null ? `✅ +${profit} @ ${mult.toFixed(2)}×` : `✅ CASHED`)
                     : isCrashed
-                      ? `💥 -${bet.amount}`
-                      : '● ACTIVE'}
+                    ? `💥 -${bet.amount}`
+                    : '● ACTIVE'}
                 </span>
               </div>
             );
@@ -1810,7 +1707,6 @@ function DiceGame({ user, setUser, addTransaction }) {
   const [history, setHistory] = useState([]);
   const [lastRoll, setLastRoll] = useState(null);
   const [multInput, setMultInput] = useState('');
-
   const [controlTab, setControlTab] = useState('manual');
   const [autoBet, setAutoBet] = useState(false);
   const [autoRounds, setAutoRounds] = useState(0);
@@ -1821,8 +1717,8 @@ function DiceGame({ user, setUser, addTransaction }) {
     stopOnWin: 0, stopOnLoss: 0, maxBet: 10000,
   });
   const [autoStats, setAutoStats] = useState({ wins: 0, losses: 0, currentBet: 50, totalProfit: 0, totalLoss: 0 });
-  const autoTimerRef = useRef(null);
 
+  const autoTimerRef = useRef(null);
   const autoStatsRef = useRef(autoStats);
   const autoSettingsRef = useRef(autoSettings);
   const betAmountRef = useRef(parseFloat(betAmount) || 0.01);
@@ -1851,7 +1747,7 @@ function DiceGame({ user, setUser, addTransaction }) {
 
   const sliderRef = useRef(null);
   const [dragging, setDragging] = useState(false);
-
+  
   const getTargetFromX = (clientX) => {
     const rect = sliderRef.current?.getBoundingClientRect();
     if (!rect) return target;
@@ -1894,6 +1790,11 @@ function DiceGame({ user, setUser, addTransaction }) {
   };
 
   const executeRoll = async () => {
+    // === FIX: Atomic Race Condition Lock ===
+    // Check AND lock immediately before any balance operation
+    if (rollingRef.current) return;
+    rollingRef.current = true; // Lock immediately!
+
     const isAuto = autoBetRef.current;
     const currentBet = isAuto ? autoStatsRef.current.currentBet : betAmountRef.current;
     const currentDirection = directionRef.current;
@@ -1902,8 +1803,11 @@ function DiceGame({ user, setUser, addTransaction }) {
     const currentMultiplier = parseFloat((99 / currentWinChance).toFixed(2));
 
     if (balanceRef.current < currentBet) {
-      autoBetRef.current = false; setAutoBet(false);
-      clearInterval(autoTimerRef.current);
+      rollingRef.current = false; // Unlock before returning
+      if (isAuto) {
+        autoBetRef.current = false; setAutoBet(false);
+        clearInterval(autoTimerRef.current);
+      }
       alert('Insufficient balance!'); return;
     }
 
@@ -1912,15 +1816,24 @@ function DiceGame({ user, setUser, addTransaction }) {
     const u = userRef.current;
     const uid = userIdRef.current;
 
-    setUser(prev => {
-      const updated = { ...prev, tmcBalance: newBalance, totalWagered: prev.totalWagered + currentBet };
-      balanceRef.current = newBalance;
-      return updated;
-    });
-    setRolling(true); rollingRef.current = true;
-    setShowResult(false); setResult(null);
+    // === FIX: Update ref IMMEDIATELY (sync) before setUser (async) ===
+    // This ensures balanceRef.current has the fresh value for setTimeout closure
+    balanceRef.current = newBalance;
 
+    setUser(prev => {
+      // === FIX: Use ref for fresh value, NOT prev (stale closure) ===
+      const freshPrev = { ...prev, tmcBalance: balanceRef.current };
+      return {
+        ...freshPrev, 
+        tmcBalance: newBalance, 
+        totalWagered: freshPrev.totalWagered + currentBet 
+      };
+    });
+
+    setRolling(true);
+    setShowResult(false); setResult(null);
     let dbBetId = null;
+
     if (uid && !String(uid).startsWith('local-')) {
       try {
         await apiUpdateUser(uid, { balance: newBalance, total_wagered: u.totalWagered + currentBet });
@@ -1938,25 +1851,51 @@ function DiceGame({ user, setUser, addTransaction }) {
       const isWin = currentDirection === 'over' ? roll > currentTarget : roll < currentTarget;
       const winAmount = isWin ? currentBet * currentMultiplier : 0;
       const nextBet = calculateNextBet(isWin ? 'win' : 'loss');
-      const postBalance = isWin ? newBalance + winAmount : newBalance;
       const profit = isWin ? winAmount - currentBet : -currentBet;
 
+      // === FIX: Read FRESH balance from ref (closure trap fix) ===
+      const liveBalance = balanceRef.current;
+      // === FIX: On loss, balance already deducted at start, so postBalance = liveBalance ===
+      // === FIX: On win, add winAmount to already-deducted balance ===
+      const postBalance = isWin ? liveBalance + winAmount : liveBalance;
+
       setResult({ roll, isWin, winAmount, multiplier: currentMultiplier });
-      setRolling(false); rollingRef.current = false;
+      setRolling(false); 
+      rollingRef.current = false; // Release lock
       setShowResult(true); setLastRoll(roll);
       setHistory(prev => [{ roll, isWin, multiplier: currentMultiplier }, ...prev].slice(0, 20));
 
       if (isWin) {
+        // === FIX: Update ref IMMEDIATELY before setUser ===
+        balanceRef.current = postBalance;
+        // Win: Add winnings back to balance
         setUser(prev => {
-          const updated = { ...prev, tmcBalance: postBalance, totalWon: prev.totalWon + profit };
-          balanceRef.current = postBalance;
-          return updated;
+          // === FIX: Use ref for fresh value, NOT prev (stale closure) ===
+          const freshPrev = { ...prev, tmcBalance: balanceRef.current };
+          return {
+            ...freshPrev, 
+            tmcBalance: postBalance, 
+            totalWon: freshPrev.totalWon + profit 
+          };
         });
+        // === FIX: Force re-render so UI shows updated balance ===
+        setForceUpdate(v => v + 1);
+        // === FIX: Force re-render so UI shows updated balance ===
+        setForceUpdate(v => v + 1);
         addTransaction({ type: 'bet_credit', amount: winAmount, direction: 'credit', note: `Dice ${roll} ${currentDirection} ${currentTarget} @ ${currentMultiplier}×` });
         const newStats = { ...autoStatsRef.current, wins: autoStatsRef.current.wins + 1, currentBet: nextBet, totalProfit: autoStatsRef.current.totalProfit + profit };
         autoStatsRef.current = newStats; setAutoStats(newStats);
       } else {
-        setUser(prev => ({ ...prev, totalLost: prev.totalLost + currentBet }));
+        // === FIX: Loss - Balance ALREADY deducted at start, only update totalLost stat ===
+        setUser(prev => {
+          // === FIX: Use ref for fresh value, NOT prev (stale closure) ===
+          const freshPrev = { ...prev, tmcBalance: balanceRef.current };
+          return { ...freshPrev, totalLost: freshPrev.totalLost + currentBet };
+        });
+        // === FIX: Force re-render so UI shows updated balance ===
+        setForceUpdate(v => v + 1);
+        // === FIX: Force re-render so UI shows updated balance ===
+        setForceUpdate(v => v + 1);
         addTransaction({ type: 'bet_debit', amount: currentBet, direction: 'debit', note: `Dice ${roll} ${currentDirection} ${currentTarget}` });
         const newStats = { ...autoStatsRef.current, losses: autoStatsRef.current.losses + 1, currentBet: nextBet, totalLoss: autoStatsRef.current.totalLoss + currentBet };
         autoStatsRef.current = newStats; setAutoStats(newStats);
@@ -1972,7 +1911,7 @@ function DiceGame({ user, setUser, addTransaction }) {
       }
 
       if (isAuto) { setBetAmount(nextBet.toFixed(2)); betAmountRef.current = nextBet; }
-      autoRolledRef.current += 1; setAutoRolled(prev => prev + 1);
+      setAutoRolled(prev => prev + 1);
     }, 350);
   };
 
@@ -2004,8 +1943,7 @@ function DiceGame({ user, setUser, addTransaction }) {
   };
 
   useEffect(() => { return () => clearInterval(autoTimerRef.current); }, []);
-
-  const handleRoll = () => { if (rollingRef.current) return; executeRoll(); };
+  const handleRoll = () => { executeRoll(); };
   const halfBet = () => setBetAmount(prev => parseFloat(Math.max(0.01, prev / 2).toFixed(2)));
   const doubleBet = () => setBetAmount(prev => { const doubled = prev * 2; const max = balanceRef.current; return parseFloat(Math.min(max, doubled).toFixed(2)); });
   const halfTarget = () => setTarget(prev => Math.max(1.01, parseFloat((prev / 2).toFixed(2))));
@@ -2130,7 +2068,6 @@ function LimboGame({ user, setUser, addTransaction }) {
   const [result, setResult] = useState(null);
   const [showResult, setShowResult] = useState(false);
   const [history, setHistory] = useState([]);
-
   const [controlTab, setControlTab] = useState('manual');
   const [autoBet, setAutoBet] = useState(false);
   const [autoRounds, setAutoRounds] = useState(0);
@@ -2141,8 +2078,8 @@ function LimboGame({ user, setUser, addTransaction }) {
     stopOnWin: 0, stopOnLoss: 0, maxBet: 10000,
   });
   const [autoStats, setAutoStats] = useState({ wins: 0, losses: 0, currentBet: 50, totalProfit: 0, totalLoss: 0 });
-  const autoTimerRef = useRef(null);
 
+  const autoTimerRef = useRef(null);
   const autoStatsRef = useRef(autoStats);
   const autoSettingsRef = useRef(autoSettings);
   const betAmountRef = useRef(parseFloat(betAmount) || 0.01);
@@ -2191,13 +2128,21 @@ function LimboGame({ user, setUser, addTransaction }) {
   };
 
   const executePlay = async () => {
+    // === FIX: Atomic Race Condition Lock ===
+    // Check AND lock immediately before any balance operation
+    if (playingRef.current) return;
+    playingRef.current = true; // Lock immediately!
+
     const isAuto = autoBetRef.current;
     const currentBet = isAuto ? autoStatsRef.current.currentBet : betAmountRef.current;
     const currentTarget = targetRef.current;
 
     if (balanceRef.current < currentBet) {
-      autoBetRef.current = false; setAutoBet(false);
-      clearInterval(autoTimerRef.current);
+      playingRef.current = false; // Unlock before returning
+      if (isAuto) {
+        autoBetRef.current = false; setAutoBet(false);
+        clearInterval(autoTimerRef.current);
+      }
       alert('Insufficient balance!'); return;
     }
 
@@ -2206,15 +2151,23 @@ function LimboGame({ user, setUser, addTransaction }) {
     const u = userRef.current;
     const uid = userIdRef.current;
 
-    setUser(prev => {
-      const updated = { ...prev, tmcBalance: newBalance, totalWagered: prev.totalWagered + currentBet };
-      balanceRef.current = newBalance;
-      return updated;
-    });
-    setPlaying(true); playingRef.current = true;
-    setShowResult(false); setResult(null);
+    // === FIX: Update ref IMMEDIATELY (sync) before setUser (async) ===
+    balanceRef.current = newBalance;
 
+    setUser(prev => {
+      // === FIX: Use ref for fresh value, NOT prev (stale closure) ===
+      const freshPrev = { ...prev, tmcBalance: balanceRef.current };
+      return {
+        ...freshPrev, 
+        tmcBalance: newBalance, 
+        totalWagered: freshPrev.totalWagered + currentBet 
+      };
+    });
+
+    setPlaying(true);
+    setShowResult(false); setResult(null);
     let dbBetId = null;
+
     if (uid && !String(uid).startsWith('local-')) {
       try {
         await apiUpdateUser(uid, { balance: newBalance, total_wagered: u.totalWagered + currentBet });
@@ -2232,25 +2185,51 @@ function LimboGame({ user, setUser, addTransaction }) {
       const isWin = resultMult >= currentTarget;
       const winAmount = isWin ? currentBet * currentTarget : 0;
       const nextBet = calculateNextBet(isWin ? 'win' : 'loss');
-      const postBalance = isWin ? newBalance + winAmount : newBalance;
       const profit = isWin ? winAmount - currentBet : -currentBet;
 
+      // === FIX: Read FRESH balance from ref (closure trap fix) ===
+      const liveBalance = balanceRef.current;
+      // === FIX: On loss, balance already deducted at start, so postBalance = liveBalance ===
+      // === FIX: On win, add winAmount to already-deducted balance ===
+      const postBalance = isWin ? liveBalance + winAmount : liveBalance;
+
       setResult({ resultMult, isWin, winAmount });
-      setPlaying(false); playingRef.current = false;
+      setPlaying(false); 
+      playingRef.current = false; // Release lock
       setShowResult(true);
       setHistory(prev => [{ resultMult, isWin }, ...prev].slice(0, 20));
 
       if (isWin) {
+        // === FIX: Update ref IMMEDIATELY before setUser ===
+        balanceRef.current = postBalance;
+        // Win: Add winnings back to balance
         setUser(prev => {
-          const updated = { ...prev, tmcBalance: postBalance, totalWon: prev.totalWon + profit };
-          balanceRef.current = postBalance;
-          return updated;
+          // === FIX: Use ref for fresh value, NOT prev (stale closure) ===
+          const freshPrev = { ...prev, tmcBalance: balanceRef.current };
+          return {
+            ...freshPrev, 
+            tmcBalance: postBalance, 
+            totalWon: freshPrev.totalWon + profit 
+          };
         });
+        // === FIX: Force re-render so UI shows updated balance ===
+        setForceUpdate(v => v + 1);
+        // === FIX: Force re-render so UI shows updated balance ===
+        setForceUpdate(v => v + 1);
         addTransaction({ type: 'bet_credit', amount: winAmount, direction: 'credit', note: `Limbo ${resultMult.toFixed(2)}× ≥ ${currentTarget}×` });
         const newStats = { ...autoStatsRef.current, wins: autoStatsRef.current.wins + 1, currentBet: nextBet, totalProfit: autoStatsRef.current.totalProfit + profit };
         autoStatsRef.current = newStats; setAutoStats(newStats);
       } else {
-        setUser(prev => ({ ...prev, totalLost: prev.totalLost + currentBet }));
+        // === FIX: Loss - Balance ALREADY deducted at start, only update totalLost stat ===
+        setUser(prev => {
+          // === FIX: Use ref for fresh value, NOT prev (stale closure) ===
+          const freshPrev = { ...prev, tmcBalance: balanceRef.current };
+          return { ...freshPrev, totalLost: freshPrev.totalLost + currentBet };
+        });
+        // === FIX: Force re-render so UI shows updated balance ===
+        setForceUpdate(v => v + 1);
+        // === FIX: Force re-render so UI shows updated balance ===
+        setForceUpdate(v => v + 1);
         addTransaction({ type: 'bet_debit', amount: currentBet, direction: 'debit', note: `Limbo ${resultMult.toFixed(2)}× < ${currentTarget}×` });
         const newStats = { ...autoStatsRef.current, losses: autoStatsRef.current.losses + 1, currentBet: nextBet, totalLoss: autoStatsRef.current.totalLoss + currentBet };
         autoStatsRef.current = newStats; setAutoStats(newStats);
@@ -2266,7 +2245,7 @@ function LimboGame({ user, setUser, addTransaction }) {
       }
 
       if (isAuto) { setBetAmount(nextBet.toFixed(2)); betAmountRef.current = nextBet; }
-      autoRolledRef.current += 1; setAutoRolled(prev => prev + 1);
+      setAutoRolled(prev => prev + 1);
     }, 400);
   };
 
@@ -2298,8 +2277,7 @@ function LimboGame({ user, setUser, addTransaction }) {
   };
 
   useEffect(() => { return () => clearInterval(autoTimerRef.current); }, []);
-
-  const handlePlay = () => { if (playingRef.current) return; executePlay(); };
+  const handlePlay = () => { executePlay(); };
   const halfBet = () => setBetAmount(prev => parseFloat(Math.max(0.01, prev / 2).toFixed(2)));
   const doubleBet = () => setBetAmount(prev => { const doubled = prev * 2; const max = balanceRef.current; return parseFloat(Math.min(max, doubled).toFixed(2)); });
   const halfTarget = () => setTarget(prev => Math.max(1.01, parseFloat((prev / 2).toFixed(2))));
@@ -2340,7 +2318,33 @@ function LimboGame({ user, setUser, addTransaction }) {
         <div className="text-[9px] text-text-secondary uppercase tracking-wider mb-1">Amount</div>
         <div className="flex items-center gap-1">
           <span className="text-gold text-xs">◎</span>
-          <input type="text" inputMode="decimal" value={betAmount} onChange={e => { const val = e.target.value; if (val === '' || val === '.') { setBetAmount(val); return; } const num = parseFloat(val); if (isNaN(num)) return; if (num < 0.01) { setBetAmount('0.01'); return; } const max = balanceRef.current; if (num > max) { setBetAmount(parseFloat(max.toFixed(2))); return; } setBetAmount(parseFloat(num.toFixed(2))); }} onBlur={e => { const val = e.target.value; if (val === '' || val === '.' || isNaN(parseFloat(val)) || parseFloat(val) < 0.01) { setBetAmount('0.01'); return; } const max = balanceRef.current; const num = parseFloat(val); if (num > max) setBetAmount(parseFloat(max.toFixed(2))); }} className="flex-1 bg-transparent font-orbitron text-sm outline-none" />
+          <input 
+            type="text" 
+            inputMode="decimal" 
+            value={betAmount} 
+            onChange={e => { 
+              const val = e.target.value; 
+              if (val === '' || val === '.') { setBetAmount(val); return; } 
+              if (!/^\d*\.?\d*$/.test(val)) return; 
+              const num = parseFloat(val); 
+              if (isNaN(num)) return; 
+              const max = balanceRef.current; 
+              if (num > max) { setBetAmount(parseFloat(max.toFixed(2)).toString()); return; } 
+              setBetAmount(val); 
+            }} 
+            onBlur={e => { 
+              const val = e.target.value; 
+              if (val === '' || val === '.' || isNaN(parseFloat(val)) || parseFloat(val) < 0.01) { 
+                setBetAmount('0.01'); 
+                return; 
+              } 
+              const max = balanceRef.current; 
+              const num = parseFloat(val); 
+              if (num > max) setBetAmount(parseFloat(max.toFixed(2)).toString());
+              else setBetAmount(parseFloat(num.toFixed(2)).toString());
+            }} 
+            className="flex-1 bg-transparent font-orbitron text-sm outline-none" 
+          />
           <div className="flex gap-0.5">
             <button onClick={halfBet} className="px-1.5 py-0.5 bg-surface rounded text-[9px] font-bold text-text-secondary hover:text-gold">1/2</button>
             <button onClick={doubleBet} className="px-1.5 py-0.5 bg-surface rounded text-[9px] font-bold text-text-secondary hover:text-gold">2×</button>
@@ -2433,15 +2437,13 @@ function WalletTab({ user, setUser, transactions, addTransaction }) {
   const confirmSwap = async () => {
     const amount = parseFloat(swapAmount), receive = calculateReceive();
     const newBalance = swapDirection === 'buy' ? user.tmcBalance + receive : user.tmcBalance - amount;
-
-    if (swapDirection === 'buy') { 
-      setUser(prev => ({ ...prev, tmcBalance: newBalance })); 
-      addTransaction({ type: 'deposit', amount: receive, direction: 'credit', ton_amount: amount, note: 'TON → TMC' }); 
-    } else { 
-      setUser(prev => ({ ...prev, tmcBalance: newBalance })); 
-      addTransaction({ type: 'withdrawal', amount, direction: 'debit', ton_amount: receive, note: 'TMC → TON (2% fee)' }); 
+    if (swapDirection === 'buy') {
+      setUser(prev => ({ ...prev, tmcBalance: newBalance }));
+      addTransaction({ type: 'deposit', amount: receive, direction: 'credit', ton_amount: amount, note: 'TON → TMC' });
+    } else {
+      setUser(prev => ({ ...prev, tmcBalance: newBalance }));
+      addTransaction({ type: 'withdrawal', amount, direction: 'debit', ton_amount: receive, note: 'TMC → TON (2% fee)' });
     }
-
     if (user.id && !String(user.id).startsWith('local-')) {
       try {
         await apiUpdateUser(user.id, { balance: newBalance });
@@ -2453,7 +2455,6 @@ function WalletTab({ user, setUser, transactions, addTransaction }) {
         });
       } catch (e) { console.error('DB swap sync failed:', e); }
     }
-
     setSwapAmount(''); setShowConfirm(false);
   };
 
@@ -2543,7 +2544,6 @@ function RanksTab({ user }) {
   const [loading, setLoading] = useState(true);
   const [referralStats, setReferralStats] = useState([]);
   const [copied, setCopied] = useState(false);
-
   const referralLink = `https://t.me/TonMineBot?start=${user.referralCode}`;
   const miniAppLink = `https://t.me/TonMineBot/app?startapp=${user.referralCode}`;
 
@@ -2579,7 +2579,6 @@ function RanksTab({ user }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (e) {
-      // Fallback for older browsers
       const textArea = document.createElement('textarea');
       textArea.value = referralLink;
       document.body.appendChild(textArea);
@@ -2593,7 +2592,9 @@ function RanksTab({ user }) {
 
   const handleShare = () => {
     const tg = window.Telegram?.WebApp;
-    const shareText = `🚀 Join me on TONMINE — the ultimate mining & casino game on TON!\n\nUse my link to get started and earn together:\n${referralLink}`;
+    const shareText = ` Join me on TONMINE — the ultimate mining & casino game on TON!
+Use my link to get started and earn together:
+${referralLink}`;
     if (tg) {
       tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(shareText)}`);
     } else {
@@ -2606,29 +2607,25 @@ function RanksTab({ user }) {
     if (mined >= 100000) return { name: 'Diamond', icon: '💎', color: '#00E5FF' };
     if (mined >= 10000) return { name: 'Gold', icon: '🥇', color: '#FFB800' };
     if (mined >= 1000) return { name: 'Silver', icon: '🥈', color: '#94A3B8' };
-    return { name: 'Bronze', icon: '🥉', color: '#CD7F32' };
+    return { name: 'Bronze', icon: '', color: '#CD7F32' };
   };
-
-  const getLeagueIcon = (league) => ({ 'Legend': '👑', 'Diamond': '💎', 'Gold': '🥇', 'Silver': '🥈', 'Bronze': '🥉' }[league] || '🥉');
+  const getLeagueIcon = (league) => ({ 'Legend': '👑', 'Diamond': '💎', 'Gold': '', 'Silver': '🥈', 'Bronze': '🥉' }[league] || '🥉');
   const getLeagueColor = (league) => ({ 'Legend': '#C084FC', 'Diamond': '#00E5FF', 'Gold': '#FFB800', 'Silver': '#94A3B8', 'Bronze': '#CD7F32' }[league] || '#CD7F32');
 
   const tier1Count = referralStats.filter(r => r.tier === 1).length;
   const tier2Count = referralStats.filter(r => r.tier === 2).length;
   const tier3Count = referralStats.filter(r => r.tier === 3).length;
   const totalEarned = referralStats.reduce((sum, r) => sum + (parseFloat(r.total_earned) || 0), 0);
-
   const currentLeaders = leaders[rankTab] || [];
   const scoreField = rankTab === 'miners' ? 'total_mined_ever' : rankTab === 'bettors' ? 'total_wagered' : 'total_won';
 
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-      {/* Referral Card */}
       <div className="glass-card-gold p-4">
         <div className="flex items-center gap-2 mb-3">
           <Users className="w-4 h-4 text-gold" />
           <span className="font-orbitron text-sm text-gold">Referral Program</span>
         </div>
-
         <div className="glass-card p-2 flex items-center gap-2 mb-3">
           <code className="text-xs text-cyan flex-1 truncate">{referralLink}</code>
           <button onClick={handleCopy} className="p-1.5 hover:bg-white/5 rounded transition-colors relative">
@@ -2639,7 +2636,6 @@ function RanksTab({ user }) {
             <Share2 className="w-4 h-4 text-text-secondary" />
           </button>
         </div>
-
         <div className="grid grid-cols-2 gap-2 mb-3">
           <div className="glass-card p-2 text-center">
             <div className="text-[10px] text-text-secondary">Total Earned</div>
@@ -2650,7 +2646,6 @@ function RanksTab({ user }) {
             <div className="font-orbitron text-sm text-cyan">{referralStats.length}</div>
           </div>
         </div>
-
         <div className="grid grid-cols-3 gap-2 mb-3">
           <div className="glass-card p-2 text-center">
             <div className="text-[9px] text-text-secondary">Tier 1</div>
@@ -2668,13 +2663,10 @@ function RanksTab({ user }) {
             <div className="text-[9px] text-purple/70">5%</div>
           </div>
         </div>
-
         <div className="text-[10px] text-text-muted text-center">
           Share your link. Earn when friends mine & play. Up to 3 levels deep.
         </div>
       </div>
-
-      {/* Referral Friends List */}
       {referralStats.length > 0 && (
         <div className="space-y-2">
           <h3 className="font-orbitron text-xs text-text-secondary uppercase tracking-wider px-1">Your Friends</h3>
@@ -2691,17 +2683,13 @@ function RanksTab({ user }) {
           </div>
         </div>
       )}
-
-      {/* Leaderboard */}
       <div className="space-y-2">
         <div className="flex gap-1 p-1 bg-surface rounded-xl">
-          {[{ id: 'miners', label: 'Top Miners', icon: '⛏️' }, { id: 'bettors', label: 'Top Bettors', icon: '🎰' }, { id: 'winners', label: 'Top Winners', icon: '🏆' }].map(tab => (
+          {[{ id: 'miners', label: 'Top Miners', icon: '️' }, { id: 'bettors', label: 'Top Bettors', icon: '' }, { id: 'winners', label: 'Top Winners', icon: '🏆' }].map(tab => (
             <button key={tab.id} onClick={() => setRankTab(tab.id)} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${rankTab === tab.id ? 'bg-gold/20 text-gold border border-gold/30' : 'text-text-secondary'}`}><span className="mr-1">{tab.icon}</span>{tab.label}</button>
           ))}
         </div>
-
         {loading && <div className="text-center text-xs text-text-muted py-4">Loading leaderboard...</div>}
-
         <div className="space-y-2">
           {currentLeaders.map((leader, i) => {
             const league = getLeagueFromMined(parseFloat(leader.total_mined_ever) || 0);
@@ -2723,7 +2711,6 @@ function RanksTab({ user }) {
             );
           })}
         </div>
-
         <div className="glass-card-gold p-3 flex items-center justify-between sticky bottom-2">
           <div className="flex items-center gap-3">
             <div className="w-6 h-6 rounded-full bg-gold/20 text-gold flex items-center justify-center text-xs font-bold font-orbitron">?</div>

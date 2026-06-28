@@ -1,8 +1,25 @@
 import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const SUPABASE_URL = 'https://vrreeybsuhucjtgduiuw.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZycmVleWJzdWh1Y2p0Z2R1aXV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0Mjc2MzEsImV4cCI6MjA5NzAwMzYzMX0.6C4BTHhF_eG20N5T6lXYql_zyG9T11EBQ_b4s_rybJQ';
+// Current file ka path nikalo
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: false }
-});
+// Explicitly 'backend' folder ke andar .env file dhundho
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
+// 🔍 DEBUG: Terminal me check karo ki values aa rahi hain ya nahi
+console.log("🔍 SUPABASE_URL:", process.env.SUPABASE_URL);
+console.log("🔍 SECRET KEY:", process.env.SUPABASE_SERVICE_ROLE_KEY ? "Loaded (Hidden)" : "Missing!");
+
+if (!process.env.SUPABASE_URL) {
+    console.error("❌ ERROR: .env file me SUPABASE_URL nahi mila! Check your .env file in the 'backend' folder.");
+}
+
+export const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  { auth: { persistSession: false } }
+);

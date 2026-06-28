@@ -2,12 +2,15 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import dotenv from 'dotenv'; // 👈 ADD THIS
 import authRoutes from './routes/auth.js';
 import gameRoutes from './routes/game.js';
 import miningRoutes from './routes/mining.js';
 import referralRoutes from './routes/referrals.js';
 import { generateCrashPoint } from './services/gameEngine.js';
 import { supabase } from './services/supabase.js';
+
+dotenv.config(); // 👈 ADD THIS
 
 const app = express();
 const httpServer = createServer(app);
@@ -18,31 +21,28 @@ const io = new Server(httpServer, {
 app.use(cors());
 app.use(express.json());
 
-// REST API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/game', gameRoutes);
 app.use('/api/mining', miningRoutes);
 app.use('/api/referrals', referralRoutes);
 
-// Health check
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
 // ========== SOCKET.IO CRASH GAME ==========
-// All connected clients see the SAME crash game in real-time
-
 const crashState = {
-  gameState: 'betting',   // betting | flying | crashed
+  gameState: 'betting',
   multiplier: 1.0,
   crashPoint: null,
   elapsed: 0,
   roundNumber: 1,
   timeLeft: 5,
   history: [2.45, 1.12, 5.67, 1.89, 3.21, 1.05, 8.90, 2.34, 1.45, 6.78],
-  activeBets: new Map(), // userId -> { betId, amount, autoCashout, username }
+  activeBets: new Map(),
   cashedOut: new Set(),
   serverSeedHash: generateSeedHash(),
   flyInterval: null,
   countdownInterval: null,
+  currentRoundId: null, // 👈 ADD THIS (Game round track karne ke liye)
 };
 
 function generateSeedHash() {
@@ -88,19 +88,20 @@ function startFlying() {
         async function processAutoCashout() {
           try {
             const mult = crashState.multiplier;
+            // 👇 SECURE RPC CALL: Balance me profit add hoga, total_won badhega
+            const { error } = await supabase.rpc('cashout_crash_bet', {
+              p_bet_id: bet.betId,
+              p_cashout_multiplier: mult
+            });
+
+            if (error) throw new Error(error.message);
+
+            const { data: user } = await supabase.from('users').select('balance').eq('id', userId).single();
             const winAmount = parseFloat((bet.amount * mult).toFixed(4));
             const profit = parseFloat((winAmount - bet.amount).toFixed(4));
-            const { data: user } = await supabase.from('users').select('balance, total_won').eq('id', userId).single();
-            if (!user) return;
-            const newBalance = parseFloat((user.balance + winAmount).toFixed(4));
-            const newWon = parseFloat((user.total_won + profit).toFixed(4));
-            await supabase.from('users').update({ balance: newBalance, total_won: newWon }).eq('id', userId);
-            await supabase.from('bets').update({
-              status: 'cashed_out', cashed_out_at: mult, profit,
-              settled_at: new Date().toISOString()
-            }).eq('id', bet.betId);
+
             io.to(`user:${userId}`).emit('crash:autoCashed', {
-              multiplier: mult, winAmount, profit, balance: newBalance
+              multiplier: mult, winAmount, profit, balance: user.balance
             });
           } catch (e) {
             console.error('Auto-cashout failed:', e.message);
@@ -110,7 +111,6 @@ function startFlying() {
       }
     }
 
-    // Generate particles
     const now = Date.now();
     if (now - lastParticleTime > 80) {
       lastParticleTime = now;
@@ -126,32 +126,30 @@ function startFlying() {
       crashState.gameState = 'crashed';
       broadcastState();
 
-      // Process results for all bets (async helper)
       async function processCrashResults() {
+        // 👇 Game round ko 'crashed' mark karo DB me
+        await supabase.from('game_rounds').update({
+          status: 'crashed', crash_point: crashState.crashPoint, ended_at: new Date().toISOString()
+        }).eq('id', crashState.currentRoundId);
+
         for (const [userId, bet] of crashState.activeBets) {
-          if (crashState.cashedOut.has(userId)) {
-            // Already handled by cashout/autoCashed event
-            continue;
-          }
-          // Lost - update DB
+          if (crashState.cashedOut.has(userId)) continue;
           try {
-            const { data: lostUser } = await supabase.from('users').select('total_lost').eq('id', userId).single();
-            if (lostUser) {
-              const newLost = parseFloat((lostUser.total_lost + bet.amount).toFixed(4));
-              await supabase.from('users').update({ total_lost: newLost }).eq('id', userId);
-              await supabase.from('bets').update({
-                status: 'lost', result_value: crashState.crashPoint,
-                profit: -bet.amount, settled_at: new Date().toISOString()
-              }).eq('id', bet.betId);
-            }
+            // 👇 SECURE RPC CALL: Bet 'lost' mark hogi, total_lost badhega
+            await supabase.rpc('settle_instant_bet', {
+              p_bet_id: bet.betId,
+              p_is_win: false,
+              p_profit_amount: 0,
+              p_result_value: crashState.crashPoint
+            });
+
+            io.to(`user:${userId}`).emit('crash:lost', {
+              crashPoint: crashState.crashPoint,
+              lostAmount: bet.amount
+            });
           } catch (e) {
             console.error('Failed to process crash loss for user', userId, e.message);
           }
-
-          io.to(`user:${userId}`).emit('crash:lost', {
-            crashPoint: crashState.crashPoint,
-            lostAmount: bet.amount
-          });
         }
       }
       processCrashResults();
@@ -167,7 +165,7 @@ function startFlying() {
   }, 50);
 }
 
-function startRound() {
+async function startRound() {
   crashState.gameState = 'betting';
   crashState.multiplier = 1.0;
   crashState.crashPoint = null;
@@ -176,6 +174,22 @@ function startRound() {
   crashState.activeBets.clear();
   crashState.cashedOut.clear();
   crashState.serverSeedHash = generateSeedHash();
+  
+  // 👇 DATABASE: Naye round ki entry game_rounds table me
+  try {
+    const { data: newRound } = await supabase.from('game_rounds').insert({
+      game_type: 'crash',
+      round_number: crashState.roundNumber,
+      server_seed_hash: crashState.serverSeedHash,
+      status: 'betting',
+      started_at: new Date().toISOString()
+    }).select().single();
+    
+    crashState.currentRoundId = newRound.id;
+  } catch (e) {
+    console.error("Round create nahi hua:", e.message);
+  }
+
   broadcastState();
 
   let countdown = 5;
@@ -191,11 +205,9 @@ function startRound() {
   }, 1000);
 }
 
-// Socket.io connection handling
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 
-  // Join user-specific room for targeted events
   socket.on('auth', (userId) => {
     socket.join(`user:${userId}`);
     console.log(`Socket ${socket.id} joined room user:${userId}`);
@@ -209,27 +221,28 @@ io.on('connection', (socket) => {
     }
 
     try {
-      const { data: user } = await supabase.from('users').select('balance, username').eq('id', userId).single();
-      if (!user || user.balance < amount) {
-        socket.emit('crash:error', { message: 'Insufficient balance' });
+      // 👇 SECURE RPC CALL: Balance katega, Wager track hoga, Transaction save hogi
+      const { data: betId, error: betError } = await supabase.rpc('place_bet_securely', {
+        p_user_id: userId,
+        p_game_round_id: crashState.currentRoundId,
+        p_amount: amount,
+        p_auto_cashout: autoCashout || null,
+        p_target_value: null,
+        p_dice_direction: null
+      });
+
+      if (betError) {
+        socket.emit('crash:error', { message: betError.message.includes('Insufficient') ? 'Insufficient balance' : betError.message });
         return;
       }
 
-      const newBalance = parseFloat((user.balance - amount).toFixed(4));
-      await supabase.from('users').update({ balance: newBalance }).eq('id', userId);
-
-      const { data: bet } = await supabase.from('bets').insert({
-        user_id: userId, amount,
-        auto_cashout: autoCashout || null,
-        status: 'active',
-        placed_at: new Date().toISOString()
-      }).select().single();
+      const { data: user } = await supabase.from('users').select('balance, username').eq('id', userId).single();
 
       crashState.activeBets.set(userId, {
-        betId: bet.id, amount, autoCashout: autoCashout || '0', username: user.username
+        betId: betId, amount, autoCashout: autoCashout || '0', username: user.username
       });
 
-      socket.emit('crash:betConfirmed', { betId: bet.id, balance: newBalance });
+      socket.emit('crash:betConfirmed', { betId: betId, balance: user.balance });
       broadcastState();
     } catch (e) {
       socket.emit('crash:error', { message: e.message });
@@ -249,27 +262,24 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Async processing
     async function processCashout() {
       try {
         const mult = crashState.multiplier;
+        
+        // 👇 SECURE RPC CALL: Balance me profit add hoga, total_won badhega
+        const { error } = await supabase.rpc('cashout_crash_bet', {
+          p_bet_id: bet.betId,
+          p_cashout_multiplier: mult
+        });
+
+        if (error) throw new Error(error.message);
+
+        const { data: user } = await supabase.from('users').select('balance').eq('id', userId).single();
         const winAmount = parseFloat((bet.amount * mult).toFixed(4));
         const profit = parseFloat((winAmount - bet.amount).toFixed(4));
 
-        const { data: user } = await supabase.from('users').select('balance, total_won').eq('id', userId).single();
-        if (!user) throw new Error('User not found');
-
-        const newBalance = parseFloat((user.balance + winAmount).toFixed(4));
-        const newWon = parseFloat((user.total_won + profit).toFixed(4));
-
-        await supabase.from('users').update({ balance: newBalance, total_won: newWon }).eq('id', userId);
-        await supabase.from('bets').update({
-          status: 'cashed_out', cashed_out_at: mult, profit,
-          settled_at: new Date().toISOString()
-        }).eq('id', bet.betId);
-
         crashState.cashedOut.add(userId);
-        socket.emit('crash:cashedOut', { multiplier: mult, winAmount, profit, balance: newBalance });
+        socket.emit('crash:cashedOut', { multiplier: mult, winAmount, profit, balance: user.balance });
         broadcastState();
       } catch (e) {
         socket.emit('crash:error', { message: e.message });
@@ -283,7 +293,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// Start the first round
 startRound();
 
 const PORT = process.env.PORT || 3001;
